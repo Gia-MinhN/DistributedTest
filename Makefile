@@ -1,8 +1,11 @@
-CXX ?= g++-11
-CXXFLAGS += -Wextra -Wall -std=c++17 -O2
+CXX ?= g++
+CXXFLAGS ?= -Wall -Wextra -O2
+LDFLAGS ?= -pthread
 
-gds: src/main.cpp src/commands.cpp
-	$(CXX) $(CXXFLAGS) -o gds src/main.cpp src/commands.cpp src/receiver.cpp src/sender.cpp src/node.cpp
+SRCS = src/main.cpp src/commands.cpp src/receiver.cpp src/sender.cpp src/node.cpp
+
+gds: $(SRCS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(SRCS)
 
 clean:
 	rm -f gds
