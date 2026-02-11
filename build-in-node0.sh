@@ -1,11 +1,9 @@
 #!/bin/bash
-set -euo pipefail
 
 CONTAINER="node0"
 REMOTE_DIR="/root/gds_build"
 OUT_BIN_LOCAL="./gds"
 
-# Sanity checks
 if [[ ! -d "src" ]]; then
   echo "/src directory not found."
   exit 1
