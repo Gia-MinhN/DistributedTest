@@ -5,10 +5,10 @@
 
 class Node {
 public:
-    std::string alias;
+    std::string name;
     std::string ip;
 
-    Node(std::string a, std::string i);
+    Node();
     ~Node();
 
     bool start();

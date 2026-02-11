@@ -1,4 +1,5 @@
 #include "node.h"
+#include "netutil.h"
 
 #include <iostream>
 
@@ -10,9 +11,9 @@
 #include "sender.h"
 
 
-Node::Node(std::string a, std::string i) {
-    alias = a;
-    ip = i;
+Node::Node() {
+    name = get_hostname();
+    ip = detect_local_ip();
 }
 
 Node::~Node() {

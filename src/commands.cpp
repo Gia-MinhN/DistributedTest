@@ -13,8 +13,8 @@ void hello() {
 }
 
 void info(const Node& node) {
-    std::cout << "Alias: " << node.alias << "\n";
-    std::cout << "IP:    " << node.ip << "\n";
+    std::cout << "Name: " << node.name << "\n";
+    std::cout << "IP:   " << node.ip << "\n";
 }
 
 CommandResult handle_command(const std::string& cmd, const std::string& args, const Node& node) {

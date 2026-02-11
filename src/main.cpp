@@ -7,7 +7,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <limits.h>
 
 #include "commands.h"
 #include "receiver.h"
@@ -33,20 +32,8 @@ static void split_cmd_args(const string& line, string& cmd, string& args) {
     args = trim(t.substr(i));
 }
 
-
-static string get_hostname() {
-    char buf[HOST_NAME_MAX + 1];
-    if (gethostname(buf, sizeof(buf)) == 0) {
-        buf[sizeof(buf) - 1] = '\0';
-        return string(buf);
-    }
-    return "unknown";
-}
-
 int main() {
-    string hostname = get_hostname();
-
-    Node node(hostname, "test_ip");
+    Node node;
     node.start();
 
     cout << "Welcome to GDS! Use \"help\" to view commands.\n";
