@@ -1,5 +1,7 @@
 #include "receiver.h"
 
+#include "node.h"
+
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstring>
@@ -13,7 +15,7 @@ using namespace std;
 
 static const uint16_t PORT = 9000;
 
-void udp_receiver_loop(int sock, atomic<bool>& running) {
+void udp_receiver_loop(int sock, Node& node) {
     if (sock < 0) { perror("udp socket"); return; }
 
     timeval tv{};
@@ -31,7 +33,7 @@ void udp_receiver_loop(int sock, atomic<bool>& running) {
         return;
     }
 
-    while (running.load()) {
+    while (node.running.load()) {
         char buffer[2048];
 
         sockaddr_in from{};
@@ -39,10 +41,10 @@ void udp_receiver_loop(int sock, atomic<bool>& running) {
 
         ssize_t n = recvfrom(sock, buffer, sizeof(buffer), 0, (sockaddr*)&from, &fromlen);
         if (n < 0) {
-            if (!running.load()) break;
+            if (!node.running.load()) break;
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                continue; // timeout, just loop and re-check running
+                continue;
             }
             if (errno == EINTR) continue;
             if (errno == EBADF || errno == EINVAL) break;
@@ -60,7 +62,7 @@ void udp_receiver_loop(int sock, atomic<bool>& running) {
     }
 }
 
-void tcp_receiver_loop(int sock, atomic<bool>& running) {
+void tcp_receiver_loop(int sock, Node& node) {
     if (sock < 0) { perror("tcp socket"); return; }
 
     int opt = 1;
@@ -76,19 +78,19 @@ void tcp_receiver_loop(int sock, atomic<bool>& running) {
         return;
     }
 
-    if (listen(sock, 5) < 0) {   // <-- fixed
+    if (listen(sock, 5) < 0) {
         perror("tcp listen");
         return;
     }
 
-    while (running.load()) {
+    while (node.running.load()) {
         sockaddr_in peer{};
         socklen_t peerlen = sizeof(peer);
 
         int client_sock = accept(sock, (sockaddr*)&peer, &peerlen);
         if (client_sock < 0) {
-            if (!running.load()) break;
-            if (errno == EBADF || errno == EINVAL) break; // listen socket closed
+            if (!node.running.load()) break;
+            if (errno == EBADF || errno == EINVAL) break;
             if (errno == EINTR) continue;
             perror("tcp accept");
             continue;
@@ -99,7 +101,7 @@ void tcp_receiver_loop(int sock, atomic<bool>& running) {
         cout << "[TCP connected " << ip << ":" << ntohs(peer.sin_port) << "]\n";
 
         char buffer[1024];
-        while (running.load()) {
+        while (node.running.load()) {
             int n = recv(client_sock, buffer, sizeof(buffer), 0);
             if (n <= 0) break;
 

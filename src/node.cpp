@@ -43,8 +43,8 @@ bool Node::start() {
     attempt_join.store(true);
     joined.store(false);
 
-    udp_thread = std::thread(udp_receiver_loop, udp_sock, std::ref(running));
-    tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(running));
+    udp_thread = std::thread(udp_receiver_loop, udp_sock, std::ref(*this));
+    tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(*this));
 
 
     if (is_seed) {
