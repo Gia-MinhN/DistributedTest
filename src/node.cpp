@@ -1,5 +1,4 @@
 #include "node.h"
-#include "netutil.h"
 
 #include <iostream>
 
@@ -7,9 +6,10 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
+#include "netutil.h"
 #include "receiver.h"
 #include "sender.h"
-
+#include "join.h" 
 
 Node::Node() {
     name = get_hostname();
@@ -38,17 +38,31 @@ bool Node::start() {
     }
 
     running.store(true);
+    attempt_join.store(true);
+    joined.store(false);
 
     udp_thread = std::thread(udp_receiver_loop, udp_sock, std::ref(running));
     tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(running));
 
+    if (!join_thread.joinable()) {
+        join_thread = std::thread(
+            attempt_join_loop,
+            std::ref(running),
+            std::ref(attempt_join),
+            std::ref(joined),
+            std::cref(name),
+            std::cref(ip)
+        );
+    }
+
+    std::cout << "This node (" << name << ", " << ip << ") is now running.\n";
     return true;
 }
 
 void Node::stop() {
-    if (!running.exchange(false)) {
-        return;
-    }
+    if (!running.exchange(false)) return;
+
+    attempt_join.store(false);
 
     if (tcp_sock >= 0) {
         shutdown(tcp_sock, SHUT_RDWR);
@@ -59,11 +73,10 @@ void Node::stop() {
 
     if (udp_thread.joinable()) udp_thread.join();
     if (tcp_thread.joinable()) tcp_thread.join();
+    if (join_thread.joinable()) join_thread.join();
 
     udp_sock = -1;
     tcp_sock = -1;
-}
 
-bool Node::join(const std::string& seed_ip, const std::string& msg) {
-    return send_udp(seed_ip, msg);
+    std::cout << "This node (" << name << ") is no longer running.\n";
 }

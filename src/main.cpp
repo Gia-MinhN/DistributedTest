@@ -33,13 +33,19 @@ static void split_cmd_args(const string& line, string& cmd, string& args) {
 }
 
 int main() {
+    bool auto_start = false;
+
     Node node;
-    node.start();
+
+    if (auto_start) node.start();
 
     cout << "Welcome to GDS! Use \"help\" to view commands.\n";
 
     string line;
-    while (node.is_running()) {
+
+    CommandResult res = CommandResult::Continue;
+
+    while (res != CommandResult::Quit) {
         cout << "gds> " << flush;
         if (!getline(cin, line)) break;
 
@@ -47,12 +53,10 @@ int main() {
         split_cmd_args(line, cmd, args);
         if (cmd.empty()) continue;
 
-        CommandResult res = handle_command(cmd, args, node);
-        if (res == CommandResult::Quit) {
-            node.stop();
-        }
+        res = handle_command(cmd, args, node);
     }
 
+    node.stop();
     cout << "Goodbye!\n";
     return 0;
 }

@@ -7,7 +7,7 @@ enum class CommandResult {
     Quit
 };
 
-CommandResult handle_command(const std::string& cmd, const std::string& args, const Node& node);
+CommandResult handle_command(const std::string& cmd, const std::string& args, Node& node);
 
 void help();
 void hello();
