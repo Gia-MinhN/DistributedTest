@@ -11,9 +11,32 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-using namespace std;
-
 static const uint16_t PORT = 9000;
+
+void udp_parser(Node& node, const sockaddr_in& from, const char* data, size_t len) {
+    std::string msg(data, data + len);
+
+    // trim trailing whitespace
+    while (!msg.empty() && (msg.back()=='\n' || msg.back()=='\r' || msg.back()==' ' || msg.back()=='\t'))
+        msg.pop_back();
+
+    if (msg == "ACK") {
+        node.joined.store(true);
+        node.attempt_join.store(false);
+        return;
+    }
+
+    if (msg.rfind("JOIN", 0) == 0) {
+        // seed behavior example: reply ACK
+        // if (node.name == "node0") { ... send_udp(...) ... }
+        return;
+    }
+
+    // debug print
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &from.sin_addr, ip, sizeof(ip));
+    std::cout << "[UDP from " << ip << ":" << ntohs(from.sin_port) << "] " << msg << "\n";
+}
 
 void udp_receiver_loop(int sock, Node& node) {
     if (sock < 0) { perror("udp socket"); return; }
@@ -53,12 +76,7 @@ void udp_receiver_loop(int sock, Node& node) {
             continue;
         }
 
-        char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &from.sin_addr, ip, sizeof(ip));
-
-        cout << "[UDP from " << ip << ":" << ntohs(from.sin_port) << "] ";
-        cout.write(buffer, n);
-        cout << "\n" << flush;
+        udp_parser(node, from, buffer, (size_t)n);
     }
 }
 
@@ -98,19 +116,19 @@ void tcp_receiver_loop(int sock, Node& node) {
 
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
-        cout << "[TCP connected " << ip << ":" << ntohs(peer.sin_port) << "]\n";
+        std::cout << "[TCP connected " << ip << ":" << ntohs(peer.sin_port) << "]\n";
 
         char buffer[1024];
         while (node.running.load()) {
             int n = recv(client_sock, buffer, sizeof(buffer), 0);
             if (n <= 0) break;
 
-            cout << "[TCP] ";
-            cout.write(buffer, n);
-            cout << "\n" << flush;
+            std::cout << "[TCP] ";
+            std::cout.write(buffer, n);
+            std::cout << "\n" << std::flush;
         }
 
         close(client_sock);
-        cout << "[TCP disconnected]\n";
+        std::cout << "[TCP disconnected]\n";
     }
 }
