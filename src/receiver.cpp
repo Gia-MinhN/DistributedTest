@@ -1,6 +1,6 @@
 #include "receiver.h"
-
 #include "node.h"
+#include "sender.h"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -13,29 +13,56 @@
 
 static const uint16_t PORT = 9000;
 
+using namespace std;
+
+static string trim_copy(string s) {
+    size_t a = 0;
+    while (a < s.size() && isspace((unsigned char)s[a])) a++;
+    size_t b = s.size();
+    while (b > a && isspace((unsigned char)s[b - 1])) b--;
+    return s.substr(a, b - a);
+}
+
+static bool next_token(const string& s, size_t& pos, string& out) {
+    while (pos < s.size() && isspace((unsigned char)s[pos])) pos++;
+    if (pos >= s.size()) return false;
+    size_t start = pos;
+    while (pos < s.size() && !isspace((unsigned char)s[pos])) pos++;
+    out = s.substr(start, pos - start);
+    return true;
+}
+
 void udp_parser(Node& node, const sockaddr_in& from, const char* data, size_t len) {
-    std::string msg(data, data + len);
+    (void)from;
 
-    // trim trailing whitespace
-    while (!msg.empty() && (msg.back()=='\n' || msg.back()=='\r' || msg.back()==' ' || msg.back()=='\t'))
-        msg.pop_back();
+    string msg(data, data + len);
+    msg = trim_copy(msg);
+    if (msg.empty()) return;
 
-    if (msg == "ACK") {
+    string type, name, ip, rest;
+    size_t pos = 0;
+
+    (void)next_token(msg, pos, type);
+    (void)next_token(msg, pos, name);
+    (void)next_token(msg, pos, ip);
+
+    while (pos < msg.size() && isspace((unsigned char)msg[pos])) pos++;
+    if (pos < msg.size()) rest = msg.substr(pos);
+
+    // cout << "TYPE=" << (type.empty() ? "<none>" : type)
+    //      << " NAME=" << (name.empty() ? "<none>" : name)
+    //      << " IP="   << (ip.empty() ? "<none>" : ip)
+    //      << " DATA=" << (rest.empty() ? "<none>" : rest)
+    //      << "\n";
+
+    if (type == "JOIN") {
+        send_udp(ip, "WELCOME " + node.name + " " + node.ip);
+    }
+
+    if (type == "WELCOME") {
         node.joined.store(true);
         node.attempt_join.store(false);
-        return;
     }
-
-    if (msg.rfind("JOIN", 0) == 0) {
-        // seed behavior example: reply ACK
-        // if (node.name == "node0") { ... send_udp(...) ... }
-        return;
-    }
-
-    // debug print
-    char ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &from.sin_addr, ip, sizeof(ip));
-    std::cout << "[UDP from " << ip << ":" << ntohs(from.sin_port) << "] " << msg << "\n";
 }
 
 void udp_receiver_loop(int sock, Node& node) {
