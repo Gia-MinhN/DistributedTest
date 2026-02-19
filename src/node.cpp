@@ -14,6 +14,8 @@
 Node::Node() {
     name = get_hostname();
     ip = detect_local_ip();
+
+    is_seed = (name == "node0" || name == "node9");
 }
 
 Node::~Node() {
@@ -44,15 +46,24 @@ bool Node::start() {
     udp_thread = std::thread(udp_receiver_loop, udp_sock, std::ref(running));
     tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(running));
 
-    if (!join_thread.joinable()) {
-        join_thread = std::thread(
-            attempt_join_loop,
-            std::ref(running),
-            std::ref(attempt_join),
-            std::ref(joined),
-            std::cref(name),
-            std::cref(ip)
-        );
+
+    if (is_seed) {
+        std::cout << "This is a seed node, no join attempt needed.\n";
+        attempt_join.store(false);
+        joined.store(true); 
+    } else {
+        std::cout << "Join attempts will be made in the background.\n";
+        attempt_join.store(true);
+        if (!join_thread.joinable()) {
+            join_thread = std::thread(
+                attempt_join_loop,
+                std::ref(running),
+                std::ref(attempt_join),
+                std::ref(joined),
+                std::cref(name),
+                std::cref(ip)
+            );
+        }
     }
 
     std::cout << "This node (" << name << ", " << ip << ") is now running.\n";

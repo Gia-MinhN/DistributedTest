@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-extern std::vector<std::string> introducer_ips;
+extern std::vector<std::string> seed_ips;
 
 void attempt_join_loop(std::atomic<bool>& running,
                        std::atomic<bool>& attempt_join,

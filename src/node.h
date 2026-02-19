@@ -8,6 +8,8 @@ public:
     std::string name;
     std::string ip;
 
+    bool is_seed;
+
     std::atomic<bool> running{false};
     std::atomic<bool> attempt_join{false};
     std::atomic<bool> joined{false};

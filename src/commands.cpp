@@ -15,9 +15,29 @@ void hello() {
 void info(const Node& node) {
     std::cout << "Name:   " << node.name << "\n";
     std::cout << "IP:     " << node.ip << "\n";
-    std::string run_status = (node.is_running()) ? "Running" : "Not running";
-    std::cout << "Status: " << run_status << "\n";
+
+    bool running = node.running.load();
+    bool joined  = node.joined.load();
+    bool trying  = node.attempt_join.load();
+    bool seed    = (node.name == "node0");
+
+    std::cout << "Status: " << (running ? "Running" : "Not running") << "\n";
+
+    std::string joined_str;
+    if (seed) {
+        joined_str = "Yes";
+    } else if (joined) {
+        joined_str = "Yes";
+    } else if (running && trying) {
+        joined_str = "Attempting";
+    } else {
+        joined_str = "No";
+    }
+
+    std::cout << "Joined: " << joined_str << "\n";
 }
+
+
 
 CommandResult handle_command(const std::string& cmd, const std::string& args, Node& node) {
     (void)args;

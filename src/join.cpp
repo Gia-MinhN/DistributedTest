@@ -5,7 +5,7 @@
 #include <iostream>
 #include <thread>
 
-std::vector<std::string> introducer_ips = {
+std::vector<std::string> seed_ips = {
     "10.221.62.250",
     "10.221.62.146"
 };
@@ -18,13 +18,13 @@ void attempt_join_loop(std::atomic<bool>& running,
     
     using namespace std::chrono_literals;
 
-    const auto retry_period = 2000ms;
+    const auto retry_period = 1000ms;
     
     int retry_count = 0;
     while (running.load() && attempt_join.load() && !joined.load()) {
         retry_count += 1;
         // std::cout << "Attempting join (" << retry_count << ")\n";
-        for (const auto& intro : introducer_ips) {
+        for (const auto& intro : seed_ips) {
             if (!running.load() || !attempt_join.load() || joined.load()) break;
 
             std::string msg = "JOIN " + name + " " + ip;
