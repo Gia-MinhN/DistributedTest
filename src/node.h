@@ -2,6 +2,23 @@
 #include <atomic>
 #include <thread>
 #include <string>
+#include <map>
+
+enum class MemberStatus {
+    Alive,
+    Suspect,
+    Dead
+};
+
+struct MemberInfo {
+    std::string ip;
+
+    MemberStatus status = MemberStatus::Alive;
+
+    uint64_t last_seen_ms = 0;
+    uint64_t incarnation = 0;
+};
+
 
 class Node {
 public:
@@ -20,6 +37,8 @@ public:
     std::thread udp_thread;
     std::thread tcp_thread;
     std::thread join_thread;
+
+    std::map<std::string, MemberInfo> membership;
 
     Node();
     ~Node();

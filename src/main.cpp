@@ -33,7 +33,7 @@ static void split_cmd_args(const string& line, string& cmd, string& args) {
 }
 
 int main() {
-    bool auto_start = false;
+    bool auto_start = true;
 
     Node node;
 

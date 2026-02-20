@@ -2,14 +2,16 @@
 #include "node.h"
 #include <iostream>
 
-void help() {
-    std::cout << "Commands:\n"
-              << "  help  - show this message\n"
-              << "  quit  - exit the program\n";
-}
 
-void hello() {
-    std::cout << "Hello from GDS!\n";
+void help() {
+    std::cout
+        << "Commands:\n"
+        << "  help, man   - show this message\n"
+        << "  info        - show this node's info (name, ip, status)\n"
+        << "  start       - start networking + background join attempts\n"
+        << "  stop        - stop networking + background threads\n"
+        << "  list        - list all known members\n"
+        << "  quit, exit  - exit the program\n";
 }
 
 void info(const Node& node) {
@@ -37,18 +39,42 @@ void info(const Node& node) {
     std::cout << "Joined: " << joined_str << "\n";
 }
 
+static const char* status_str(MemberStatus s) {
+    switch (s) {
+        case MemberStatus::Alive:   return "Alive";
+        case MemberStatus::Suspect: return "Suspect";
+        case MemberStatus::Dead:    return "Dead";
+        default:                    return "Unknown";
+    }
+}
 
+static void list_members(const Node& node) {
+    if (node.membership.empty()) {
+        std::cout << "(membership empty)\n";
+        return;
+    }
+
+    for (const auto& [name, info] : node.membership) {
+        std::cout << name
+                  << "  ip=" << info.ip
+                  << "  status=" << status_str(info.status)
+                  << "  last_seen_ms=" << info.last_seen_ms
+                  << "  inc=" << info.incarnation
+                  << "\n";
+    }
+}
 
 CommandResult handle_command(const std::string& cmd, const std::string& args, Node& node) {
     (void)args;
 
     if (cmd == "help" || cmd == "man")  { help(); return CommandResult::Continue; }
 
-    if (cmd == "hello")  { hello(); return CommandResult::Continue; }
     if (cmd == "info")   { info(node); return CommandResult::Continue; }
 
     if (cmd == "start")  { node.start(); return CommandResult::Continue; }
     if (cmd == "stop")   { node.stop(); return CommandResult::Continue; }
+
+    if (cmd == "list") { list_members(node); return CommandResult::Continue; }
 
     if (cmd == "quit" || cmd == "exit") return CommandResult::Quit;
 

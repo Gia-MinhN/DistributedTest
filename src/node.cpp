@@ -5,17 +5,31 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <chrono>
 
 #include "netutil.h"
 #include "receiver.h"
 #include "sender.h"
 #include "join.h" 
 
+static uint64_t now_ms() {
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
 Node::Node() {
     name = get_hostname();
     ip = detect_local_ip();
 
     is_seed = (name == "node0" || name == "node9");
+
+    MemberInfo me;
+    me.ip = ip;
+    me.status = MemberStatus::Alive;
+    me.last_seen_ms = now_ms();
+    me.incarnation = 0;
+
+    membership.insert({name, me});
 }
 
 Node::~Node() {
