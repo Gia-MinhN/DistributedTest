@@ -37,9 +37,9 @@ void attempt_join_loop(std::atomic<bool>& running,
         std::this_thread::sleep_for(retry_period);
     }
 
-    if (joined.load()) {
-        std::cout << "Join succeeded (ACK received).\n";
-    } else if (!attempt_join.load()) {
-        std::cout << "Join cancelled.\n";
-    }
+    // if (joined.load()) {
+    //     std::cout << "Join succeeded (ACK received).\n";
+    // } else if (!attempt_join.load()) {
+    //     std::cout << "Join cancelled.\n";
+    // }
 }

@@ -50,7 +50,7 @@ static const char* status_str(MemberStatus s) {
 
 static void list_members(const Node& node) {
     if (node.membership.empty()) {
-        std::cout << "(membership empty)\n";
+        std::cout << "(Membership is empty)\n";
         return;
     }
 

@@ -22,14 +22,6 @@ Node::Node() {
     ip = detect_local_ip();
 
     is_seed = (name == "node0" || name == "node9");
-
-    MemberInfo me;
-    me.ip = ip;
-    me.status = MemberStatus::Alive;
-    me.last_seen_ms = now_ms();
-    me.incarnation = 0;
-
-    membership.insert({name, me});
 }
 
 Node::~Node() {
@@ -60,7 +52,6 @@ bool Node::start() {
     udp_thread = std::thread(udp_receiver_loop, udp_sock, std::ref(*this));
     tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(*this));
 
-
     if (is_seed) {
         std::cout << "This is a seed node, no join attempt needed.\n";
         attempt_join.store(false);
@@ -80,6 +71,14 @@ bool Node::start() {
         }
     }
 
+    MemberInfo me;
+    me.ip = ip;
+    me.status = MemberStatus::Alive;
+    me.last_seen_ms = now_ms();
+    me.incarnation = 0;
+
+    membership.insert({name, me});
+
     std::cout << "This node (" << name << ", " << ip << ") is now running.\n";
     return true;
 }
@@ -88,6 +87,7 @@ void Node::stop() {
     if (!running.exchange(false)) return;
 
     attempt_join.store(false);
+    joined.store(false);
 
     if (tcp_sock >= 0) {
         shutdown(tcp_sock, SHUT_RDWR);
@@ -102,6 +102,8 @@ void Node::stop() {
 
     udp_sock = -1;
     tcp_sock = -1;
+
+    membership.clear();
 
     std::cout << "This node (" << name << ") is no longer running.\n";
 }

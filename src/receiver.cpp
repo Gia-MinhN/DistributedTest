@@ -70,7 +70,7 @@ void udp_receiver_loop(int sock, Node& node) {
 
     timeval tv{};
     tv.tv_sec = 0;
-    tv.tv_usec = 200 * 1000;
+    tv.tv_usec = 50 * 1000;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     sockaddr_in addr{};
