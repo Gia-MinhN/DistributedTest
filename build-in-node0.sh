@@ -20,11 +20,13 @@ echo "[2/5] Copying source files to container"
 lxc file push -p ./Makefile "$CONTAINER$REMOTE_DIR/Makefile"
 lxc file push -p -r ./src "$CONTAINER$REMOTE_DIR/"
 
-echo "[3/5] Installing build tools (if needed) and compiling in container"
+echo "[3/5] Compiling in container"
 lxc exec "$CONTAINER" -- bash -lc "
   set -e
-  apt-get update -y >/dev/null
-  DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential make >/dev/null
+  if ! command -v g++ >/dev/null || ! command -v make >/dev/null; then
+    apt-get update -y >/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential make >/dev/null
+  fi
   cd '$REMOTE_DIR'
   make clean >/dev/null 2>&1 || true
   make

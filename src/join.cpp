@@ -6,8 +6,8 @@
 #include <thread>
 
 std::vector<std::string> seed_ips = {
-    "10.221.62.250",
-    "10.221.62.146"
+    "10.221.62.196",
+    "10.221.62.51"
 };
 
 void attempt_join_loop(std::atomic<bool>& running,

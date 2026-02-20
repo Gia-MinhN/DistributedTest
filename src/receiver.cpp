@@ -42,9 +42,9 @@ void udp_parser(Node& node, const sockaddr_in& from, const char* data, size_t le
     string type, name, ip, rest;
     size_t pos = 0;
 
-    (void)next_token(msg, pos, type);
-    (void)next_token(msg, pos, name);
-    (void)next_token(msg, pos, ip);
+    next_token(msg, pos, type);
+    next_token(msg, pos, name);
+    next_token(msg, pos, ip);
 
     while (pos < msg.size() && isspace((unsigned char)msg[pos])) pos++;
     if (pos < msg.size()) rest = msg.substr(pos);

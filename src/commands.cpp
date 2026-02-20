@@ -1,5 +1,6 @@
 #include "commands.h"
 #include "node.h"
+#include "table_print.h"
 #include <iostream>
 
 
@@ -48,20 +49,24 @@ static const char* status_str(MemberStatus s) {
     }
 }
 
-static void list_members(const Node& node) {
-    if (node.membership.empty()) {
-        std::cout << "(Membership is empty)\n";
-        return;
-    }
+void list_members(const Node& node) {
+    std::vector<std::string> headers = {"NAME", "STATE", "IPV4", "LAST_SEEN_MS", "INC"};
+    std::vector<std::vector<std::string>> rows;
+    rows.reserve(node.membership.size());
 
     for (const auto& [name, info] : node.membership) {
-        std::cout << name
-                  << "  ip=" << info.ip
-                  << "  status=" << status_str(info.status)
-                  << "  last_seen_ms=" << info.last_seen_ms
-                  << "  inc=" << info.incarnation
-                  << "\n";
+        std::string shown_name = (name == node.name) ? (name + " *") : name;
+
+        rows.push_back({
+            shown_name,
+            status_str(info.status),
+            info.ip,
+            std::to_string(info.last_seen_ms),
+            std::to_string(info.incarnation)
+        });
     }
+
+    print_table(headers, rows);
 }
 
 CommandResult handle_command(const std::string& cmd, const std::string& args, Node& node) {
