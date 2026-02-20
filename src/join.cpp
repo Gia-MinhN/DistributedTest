@@ -27,7 +27,7 @@ void attempt_join_loop(std::atomic<bool>& running,
         for (const auto& intro : seed_ips) {
             if (!running.load() || !attempt_join.load() || joined.load()) break;
 
-            std::string msg = "JOIN " + name + " " + ip;
+            std::string msg = make_msg("JOIN", name, ip, "");
 
             if (!send_udp(intro, msg)) {
                 continue;
