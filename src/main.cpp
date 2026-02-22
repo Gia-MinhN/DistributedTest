@@ -48,7 +48,7 @@ static void split_cmd_args(const std::string& line, std::string& cmd, std::strin
 }
 
 int main() {
-    bool auto_start = true;
+    bool auto_start = false;
 
     std::vector<std::string> seeds = load_seeds_file("seeds.conf");
     Node node(std::move(seeds));
