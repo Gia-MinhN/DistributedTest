@@ -3,6 +3,8 @@
 #include <cctype>
 #include <thread>
 #include <atomic>
+#include <vector>
+#include <fstream>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,22 +14,35 @@
 #include "receiver.h"
 #include "node.h"
 
-using namespace std;
 
-static string trim(const string& s) {
+static std::string trim(const std::string& s) {
     size_t a = 0;
-    while (a < s.size() && isspace((unsigned char)s[a])) a++;
+    while (a < s.size() && std::isspace((unsigned char)s[a])) a++;
     size_t b = s.size();
-    while (b > a && isspace((unsigned char)s[b - 1])) b--;
+    while (b > a && std::isspace((unsigned char)s[b - 1])) b--;
     return s.substr(a, b - a);
 }
 
-static void split_cmd_args(const string& line, string& cmd, string& args) {
-    string t = trim(line);
+static std::vector<std::string> load_seeds_file(const std::string& path) {
+    std::vector<std::string> seeds;
+    std::ifstream in(path);
+    if (!in) return seeds;
+
+    std::string line;
+    while (std::getline(in, line)) {
+        line = trim(line);
+        if (line.empty()) continue;
+        seeds.push_back(line);
+    }
+    return seeds;
+}
+
+static void split_cmd_args(const std::string& line, std::string& cmd, std::string& args) {
+    std::string t = trim(line);
     if (t.empty()) { cmd.clear(); args.clear(); return; }
 
     size_t i = 0;
-    while (i < t.size() && !isspace((unsigned char)t[i])) i++;
+    while (i < t.size() && !std::isspace((unsigned char)t[i])) i++;
     cmd = t.substr(0, i);
     args = trim(t.substr(i));
 }
@@ -35,21 +50,20 @@ static void split_cmd_args(const string& line, string& cmd, string& args) {
 int main() {
     bool auto_start = true;
 
-    Node node;
-
+    std::vector<std::string> seeds = load_seeds_file("seeds.conf");
+    Node node(std::move(seeds));
     if (auto_start) node.start();
 
-    cout << "Welcome to GDS! Use \"help\" to view commands.\n";
+    std::cout << "Welcome to GDS! Use \"help\" to view commands.\n";
 
-    string line;
-
+    std::string line;
     CommandResult res = CommandResult::Continue;
 
     while (res != CommandResult::Quit) {
-        cout << "gds> " << flush;
-        if (!getline(cin, line)) break;
+        std::cout << "gds> " << std::flush;
+        if (!std::getline(std::cin, line)) break;
 
-        string cmd, args;
+        std::string cmd, args;
         split_cmd_args(line, cmd, args);
         if (cmd.empty()) continue;
 
@@ -57,6 +71,6 @@ int main() {
     }
 
     node.stop();
-    cout << "Goodbye!\n";
+    std::cout << "Goodbye!\n";
     return 0;
 }

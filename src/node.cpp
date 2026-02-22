@@ -1,11 +1,12 @@
 #include "node.h"
 
 #include <iostream>
+#include <chrono>
+#include <algorithm>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <chrono>
 
 #include "netutil.h"
 #include "receiver.h"
@@ -17,11 +18,15 @@ static uint64_t now_ms() {
     return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
-Node::Node() {
+Node::Node(std::vector<std::string> s) : seeds(std::move(s)) {
     name = get_hostname();
     ip = detect_local_ip();
 
-    is_seed = (name == "node0" || name == "node9");
+    if(std::find(seeds.begin(), seeds.end(), ip) != seeds.end()) {
+        is_seed = true;
+    } else {
+        is_seed = false;
+    }
 }
 
 Node::~Node() {
@@ -53,21 +58,21 @@ bool Node::start() {
     tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(*this));
 
     if (is_seed) {
-        std::cout << "This is a seed node, no join attempt needed.\n";
+        std::cout << "Seed node: syncing with other seeds (best-effort).\n";
         attempt_join.store(false);
         joined.store(true); 
+
+        for (const auto& seed_ip : seeds) {
+            if (seed_ip == ip) continue;
+
+            std::string msg = make_msg("SEEDHELLO", name, ip);
+            send_udp(seed_ip, msg);
+        }
     } else {
-        std::cout << "Join attempts will be made in the background.\n";
+        std::cout << "Non-seed node: attempting to join via seeds (retrying in background).\n";
         attempt_join.store(true);
         if (!join_thread.joinable()) {
-            join_thread = std::thread(
-                attempt_join_loop,
-                std::ref(running),
-                std::ref(attempt_join),
-                std::ref(joined),
-                std::cref(name),
-                std::cref(ip)
-            );
+            join_thread = std::thread(attempt_join_loop, std::ref(*this));
         }
     }
 

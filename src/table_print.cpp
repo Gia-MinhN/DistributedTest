@@ -42,7 +42,7 @@ void print_table(const std::vector<std::string>& headers,
 
     for (const auto& r : rows) {
         std::vector<std::string> padded = r;
-        padded.resize(headers.size()); // ensure same col count
+        padded.resize(headers.size());
         print_row(widths, padded);
     }
 

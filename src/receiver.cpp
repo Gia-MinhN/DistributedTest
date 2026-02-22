@@ -15,7 +15,7 @@ static const uint16_t PORT = 9000;
 
 using namespace std;
 
-static string trim_copy(string s) {
+static string trim(string s) {
     size_t a = 0;
     while (a < s.size() && isspace((unsigned char)s[a])) a++;
     size_t b = s.size();
@@ -36,7 +36,7 @@ void udp_parser(Node& node, const sockaddr_in& from, const char* data, size_t le
     (void)from;
 
     string msg(data, data + len);
-    msg = trim_copy(msg);
+    msg = trim(msg);
     if (msg.empty()) return;
 
     string type, name, ip, rest;
@@ -56,7 +56,8 @@ void udp_parser(Node& node, const sockaddr_in& from, const char* data, size_t le
     //      << "\n";
 
     if (type == "JOIN") {
-        send_udp(ip, "WELCOME " + node.name + " " + node.ip);
+        std::string msg = make_msg("WELCOME", node.name, node.ip);
+        send_udp(ip, msg);
     }
 
     if (type == "WELCOME") {

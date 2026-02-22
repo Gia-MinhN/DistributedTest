@@ -1,45 +1,22 @@
 #include "join.h"
+#include "node.h"
 #include "sender.h"
 
 #include <chrono>
-#include <iostream>
 #include <thread>
 
-std::vector<std::string> seed_ips = {
-    "10.221.62.196",
-    "10.221.62.51"
-};
-
-void attempt_join_loop(std::atomic<bool>& running,
-                       std::atomic<bool>& attempt_join,
-                       std::atomic<bool>& joined,
-                       const std::string& name,
-                       const std::string& ip) {
-    
+void attempt_join_loop(Node& node) {
     using namespace std::chrono_literals;
 
-    const auto retry_period = 1000ms;
-    
-    int retry_count = 0;
-    while (running.load() && attempt_join.load() && !joined.load()) {
-        retry_count += 1;
-        // std::cout << "Attempting join (" << retry_count << ")\n";
-        for (const auto& intro : seed_ips) {
-            if (!running.load() || !attempt_join.load() || joined.load()) break;
+    while (node.running.load() && node.attempt_join.load() && !node.joined.load()) {
+        for (const auto& seed_ip : node.seeds) {
+            if (!node.running.load() || !node.attempt_join.load() || node.joined.load())
+                break;
 
-            std::string msg = make_msg("JOIN", name, ip, "");
-
-            if (!send_udp(intro, msg)) {
-                continue;
-            }
+            std::string msg = make_msg("JOIN", node.name, node.ip, "");
+            (void)send_udp(seed_ip, msg);
         }
 
-        std::this_thread::sleep_for(retry_period);
+        std::this_thread::sleep_for(750ms);
     }
-
-    // if (joined.load()) {
-    //     std::cout << "Join succeeded (ACK received).\n";
-    // } else if (!attempt_join.load()) {
-    //     std::cout << "Join cancelled.\n";
-    // }
 }

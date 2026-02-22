@@ -2,6 +2,7 @@
 #include <atomic>
 #include <thread>
 #include <string>
+#include <vector>
 #include <map>
 
 enum class MemberStatus {
@@ -25,6 +26,7 @@ public:
     std::string name;
     std::string ip;
 
+    std::vector<std::string> seeds;
     bool is_seed;
 
     std::atomic<bool> running{false};
@@ -40,11 +42,9 @@ public:
 
     std::map<std::string, MemberInfo> membership;
 
-    Node();
+    Node(std::vector<std::string> seeds);
     ~Node();
 
     bool start();
     void stop();
-
-    bool is_running() const { return running.load(); }
 };
