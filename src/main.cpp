@@ -22,7 +22,7 @@ static std::vector<std::string> load_seeds_file(const std::string& path) {
 }
 
 int main() {
-    bool auto_start = false;
+    bool auto_start = true;
 
     std::vector<std::string> seeds = load_seeds_file("seeds.conf");
     Node node(std::move(seeds));

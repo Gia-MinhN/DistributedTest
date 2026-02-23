@@ -64,7 +64,7 @@ bool Node::start() {
         for (const auto& seed_ip : seeds) {
             if (seed_ip == ip) continue;
 
-            std::string msg = make_msg("SEEDHELLO", name, ip);
+            std::string msg = make_msg("JOIN", name, ip);
             send_udp(seed_ip, msg);
         }
     } else {
