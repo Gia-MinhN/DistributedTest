@@ -1,4 +1,5 @@
 #include "time_util.h"
+
 #include <chrono>
 
 uint64_t now_ms() {

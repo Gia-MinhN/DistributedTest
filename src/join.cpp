@@ -1,9 +1,10 @@
 #include "join.h"
-#include "node.h"
-#include "sender.h"
 
 #include <chrono>
 #include <thread>
+
+#include "node.h"
+#include "sender.h"
 
 void attempt_join_loop(Node& node) {
     using namespace std::chrono_literals;

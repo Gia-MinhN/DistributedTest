@@ -1,20 +1,11 @@
+#include <fstream>
 #include <iostream>
 #include <string>
-#include <cctype>
-#include <thread>
-#include <atomic>
 #include <vector>
-#include <fstream>
-
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
 
 #include "commands.h"
-#include "receiver.h"
 #include "node.h"
 #include "string_util.h"
-
 
 static std::vector<std::string> load_seeds_file(const std::string& path) {
     std::vector<std::string> seeds;

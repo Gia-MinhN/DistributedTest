@@ -1,8 +1,9 @@
 #include "commands.h"
-#include "node.h"
-#include "table_print.h"
+
 #include <iostream>
 
+#include "node.h"
+#include "table_print.h"
 
 void help() {
     std::cout

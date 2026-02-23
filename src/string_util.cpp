@@ -1,4 +1,5 @@
 #include "string_util.h"
+
 #include <cctype>
 
 std::string trim(const std::string& s) {

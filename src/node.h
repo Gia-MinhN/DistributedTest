@@ -1,10 +1,11 @@
 #pragma once
 
 #include <atomic>
-#include <thread>
-#include <string>
-#include <vector>
+#include <cstdint>
 #include <map>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "udp_queue.h"
 

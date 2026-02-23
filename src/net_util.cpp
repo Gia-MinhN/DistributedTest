@@ -1,13 +1,12 @@
 #include "net_util.h"
 
-#include <limits.h>
+#include <string>
+
 #include <arpa/inet.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#include <cstring>
-#include <string>
 
 std::string get_hostname() {
     char buf[HOST_NAME_MAX + 1];

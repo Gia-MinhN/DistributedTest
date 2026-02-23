@@ -1,18 +1,18 @@
 #include "node.h"
 
-#include <iostream>
-#include <chrono>
 #include <algorithm>
+#include <chrono>
+#include <iostream>
 
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
+#include "join.h"
 #include "net_util.h"
-#include "time_util.h"
 #include "receiver.h"
 #include "sender.h"
-#include "join.h" 
+#include "time_util.h"
 
 
 Node::Node(std::vector<std::string> s) : seeds(std::move(s)) {

@@ -1,11 +1,11 @@
 #include "udp_queue.h"
 
+#include <iostream>
+
 #include "node.h"
 #include "sender.h"
 #include "string_util.h"
 #include "time_util.h"
-
-#include <iostream>
 
 void UdpQueue::start(Node& n) {
     if (running_) return;
@@ -75,7 +75,7 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
 
     std::string data = rest_of_line(msg, pos);
 
-    std::cout << "[UDP] " << type << " from " << name << " " << ip << " " << data << "\n";
+    // std::cout << "[UDP] " << type << " from " << name << " " << ip << " " << data << "\n";
 
     if (!name.empty() && !ip.empty()) {
         MemberInfo m;

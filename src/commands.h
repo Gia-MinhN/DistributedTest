@@ -1,5 +1,7 @@
 #pragma once
+
 #include "node.h"
+
 #include <string>
 
 enum class CommandResult {

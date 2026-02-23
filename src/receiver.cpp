@@ -1,15 +1,16 @@
 #include "receiver.h"
-#include "node.h"
-#include "sender.h"
 
 #include <arpa/inet.h>
 #include <cerrno>
-#include <cstring>
+#include <cstddef>
 #include <iostream>
+
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <unistd.h>
 #include <sys/time.h>
+#include <unistd.h>
+
+#include "node.h"
 
 static const uint16_t PORT = 9000;
 
