@@ -2,10 +2,19 @@ CXX ?= g++
 CXXFLAGS ?= -Wall -Wextra -O2
 LDFLAGS ?= -pthread
 
-SRCS = src/main.cpp src/commands.cpp src/receiver.cpp src/sender.cpp src/node.cpp src/netutil.cpp src/join.cpp src/table_print.cpp
+SRCS := $(wildcard src/*.cpp)
 
-gds: $(SRCS)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(SRCS)
+OBJDIR := obj
+OBJS := $(patsubst src/%.cpp,$(OBJDIR)/%.o,$(SRCS))
+
+gds: $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS)
+
+$(OBJDIR)/%.o: src/%.cpp | $(OBJDIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
 
 clean:
-	rm -f gds
+	rm -rf gds $(OBJDIR)

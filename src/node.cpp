@@ -8,15 +8,12 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
-#include "netutil.h"
+#include "net_util.h"
+#include "time_util.h"
 #include "receiver.h"
 #include "sender.h"
 #include "join.h" 
 
-static uint64_t now_ms() {
-    using namespace std::chrono;
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
-}
 
 Node::Node(std::vector<std::string> s) : seeds(std::move(s)) {
     name = get_hostname();
@@ -54,6 +51,8 @@ bool Node::start() {
     attempt_join.store(true);
     joined.store(false);
 
+    udpq.start(*this);
+
     udp_thread = std::thread(udp_receiver_loop, udp_sock, std::ref(*this));
     tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(*this));
 
@@ -84,7 +83,7 @@ bool Node::start() {
 
     membership.insert({name, me});
 
-    std::cout << "This node (" << name << ", " << ip << ") is now running.\n";
+    std::cout << "Node [" << name << "@" << ip << "] started.\n";
     return true;
 }
 
@@ -101,6 +100,8 @@ void Node::stop() {
     if (udp_sock >= 0) close(udp_sock);
     if (tcp_sock >= 0) close(tcp_sock);
 
+    udpq.stop();
+
     if (udp_thread.joinable()) udp_thread.join();
     if (tcp_thread.joinable()) tcp_thread.join();
     if (join_thread.joinable()) join_thread.join();
@@ -110,5 +111,5 @@ void Node::stop() {
 
     membership.clear();
 
-    std::cout << "This node (" << name << ") is no longer running.\n";
+    std::cout << "Node [" << name << "@" << ip << "] stopped.\n";
 }

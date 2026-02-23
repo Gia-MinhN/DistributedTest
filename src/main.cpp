@@ -13,15 +13,8 @@
 #include "commands.h"
 #include "receiver.h"
 #include "node.h"
+#include "string_util.h"
 
-
-static std::string trim(const std::string& s) {
-    size_t a = 0;
-    while (a < s.size() && std::isspace((unsigned char)s[a])) a++;
-    size_t b = s.size();
-    while (b > a && std::isspace((unsigned char)s[b - 1])) b--;
-    return s.substr(a, b - a);
-}
 
 static std::vector<std::string> load_seeds_file(const std::string& path) {
     std::vector<std::string> seeds;
@@ -35,16 +28,6 @@ static std::vector<std::string> load_seeds_file(const std::string& path) {
         seeds.push_back(line);
     }
     return seeds;
-}
-
-static void split_cmd_args(const std::string& line, std::string& cmd, std::string& args) {
-    std::string t = trim(line);
-    if (t.empty()) { cmd.clear(); args.clear(); return; }
-
-    size_t i = 0;
-    while (i < t.size() && !std::isspace((unsigned char)t[i])) i++;
-    cmd = t.substr(0, i);
-    args = trim(t.substr(i));
 }
 
 int main() {

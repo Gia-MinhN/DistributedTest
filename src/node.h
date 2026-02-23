@@ -1,9 +1,12 @@
 #pragma once
+
 #include <atomic>
 #include <thread>
 #include <string>
 #include <vector>
 #include <map>
+
+#include "udp_queue.h"
 
 enum class MemberStatus {
     Alive,
@@ -35,6 +38,8 @@ public:
 
     int udp_sock{-1};
     int tcp_sock{-1};
+
+    UdpQueue udpq;
 
     std::thread udp_thread;
     std::thread tcp_thread;

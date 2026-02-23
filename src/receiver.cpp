@@ -13,59 +13,6 @@
 
 static const uint16_t PORT = 9000;
 
-using namespace std;
-
-static string trim(string s) {
-    size_t a = 0;
-    while (a < s.size() && isspace((unsigned char)s[a])) a++;
-    size_t b = s.size();
-    while (b > a && isspace((unsigned char)s[b - 1])) b--;
-    return s.substr(a, b - a);
-}
-
-static bool next_token(const string& s, size_t& pos, string& out) {
-    while (pos < s.size() && isspace((unsigned char)s[pos])) pos++;
-    if (pos >= s.size()) return false;
-    size_t start = pos;
-    while (pos < s.size() && !isspace((unsigned char)s[pos])) pos++;
-    out = s.substr(start, pos - start);
-    return true;
-}
-
-void udp_parser(Node& node, const sockaddr_in& from, const char* data, size_t len) {
-    (void)from;
-
-    string msg(data, data + len);
-    msg = trim(msg);
-    if (msg.empty()) return;
-
-    string type, name, ip, rest;
-    size_t pos = 0;
-
-    next_token(msg, pos, type);
-    next_token(msg, pos, name);
-    next_token(msg, pos, ip);
-
-    while (pos < msg.size() && isspace((unsigned char)msg[pos])) pos++;
-    if (pos < msg.size()) rest = msg.substr(pos);
-
-    // cout << "TYPE=" << (type.empty() ? "<none>" : type)
-    //      << " NAME=" << (name.empty() ? "<none>" : name)
-    //      << " IP="   << (ip.empty() ? "<none>" : ip)
-    //      << " DATA=" << (rest.empty() ? "<none>" : rest)
-    //      << "\n";
-
-    if (type == "JOIN") {
-        std::string msg = make_msg("WELCOME", node.name, node.ip);
-        send_udp(ip, msg);
-    }
-
-    if (type == "WELCOME") {
-        node.joined.store(true);
-        node.attempt_join.store(false);
-    }
-}
-
 void udp_receiver_loop(int sock, Node& node) {
     if (sock < 0) { perror("udp socket"); return; }
 
@@ -104,7 +51,7 @@ void udp_receiver_loop(int sock, Node& node) {
             continue;
         }
 
-        udp_parser(node, from, buffer, (size_t)n);
+        node.udpq.enqueue(from, buffer, (size_t)n);
     }
 }
 
