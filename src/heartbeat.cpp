@@ -4,20 +4,60 @@
 #include <random>
 #include <string>
 #include <vector>
+#include <mutex>
+#include <algorithm>
 
 #include "node.h"
 #include "sender.h"
 #include "time_util.h"
+#include "membership_config.h"
 
-static const uint64_t SUSPECT_MS = 3000;
-static const uint64_t DEAD_MS    = 8000;
-static const uint64_t TICK_MS    = 1000;
+static std::string build_piggy_data(Node& node, size_t k) {
+    uint64_t self_inc = 0;
+    auto it = node.membership.find(node.name);
+    if (it != node.membership.end()) self_inc = it->second.incarnation;
 
-static std::string pick_random(const std::vector<std::string>& v) {
-    if (v.empty()) return "";
-    static thread_local std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<size_t> dist(0, v.size() - 1);
-    return v[dist(rng)];
+    // name@ip@inc@S@lastSeen,...
+    std::vector<std::string> entries;
+    entries.reserve(node.membership.size());
+
+    for (const auto& [n, info] : node.membership) {
+        if (n.empty() || info.ip.empty()) continue;
+        if (n == node.name) continue;
+
+        std::string e;
+        e.reserve(n.size() + info.ip.size() + 40);
+        e += n;
+        e.push_back('@');
+        e += info.ip;
+        e.push_back('@');
+        e += std::to_string(info.incarnation);
+        e.push_back('@');
+        e.push_back(info.status == MemberStatus::Alive ? 'A' :
+                    info.status == MemberStatus::Suspect ? 'S' : 'D');
+        e.push_back('@');
+        e += std::to_string(info.last_seen_ms);
+
+        entries.push_back(std::move(e));
+    }
+
+    if (!entries.empty() && k > 0) {
+        static thread_local std::mt19937 rng(std::random_device{}());
+        std::shuffle(entries.begin(), entries.end(), rng);
+        if (entries.size() > k) entries.resize(k);
+    } else {
+        entries.clear();
+    }
+
+    std::string csv;
+    for (size_t i = 0; i < entries.size(); i++) {
+        if (i) csv.push_back(',');
+        csv += entries[i];
+    }
+
+    std::string out = "inc=" + std::to_string(self_inc);
+    if (!csv.empty()) out += " " + csv;
+    return out;
 }
 
 void Heartbeat::start(Node& node) {
@@ -38,10 +78,12 @@ void Heartbeat::loop() {
         const uint64_t now = now_ms();
 
         std::vector<std::string> peer_ips;
+        std::string piggy_data;
 
         {
             std::lock_guard<std::mutex> lk(node_->membership_mu);
 
+            // refresh self
             auto& me = node_->membership[node_->name];
             me.ip = node_->ip;
             me.status = MemberStatus::Alive;
@@ -64,12 +106,33 @@ void Heartbeat::loop() {
                     peer_ips.push_back(info.ip);
                 }
             }
+
+            piggy_data = build_piggy_data(*node_, PIGGY_K);
         }
 
-        std::string peer_ip = pick_random(peer_ips);
-        if (!peer_ip.empty()) {
-            std::string msg = make_msg("PING", node_->name, node_->ip);
-            send_udp(peer_ip, msg);
+        std::sort(peer_ips.begin(), peer_ips.end());
+        peer_ips.erase(std::unique(peer_ips.begin(), peer_ips.end()), peer_ips.end());
+
+        if (peer_ips != rr_peers_) {
+            rr_peers_ = peer_ips;
+            rr_idx_ = 0;
+            std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
+        }
+
+        std::vector<std::string> to_ping;
+        to_ping.reserve(FANOUT);
+
+        for (size_t i = 0; i < FANOUT && !rr_peers_.empty(); i++) {
+            if (rr_idx_ >= rr_peers_.size()) {
+                rr_idx_ = 0;
+                std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
+            }
+            to_ping.push_back(rr_peers_[rr_idx_++]);
+        }
+
+        for (const auto& peer_ip : to_ping) {
+            std::string msg = make_msg("PING", node_->name, node_->ip, piggy_data);
+            (void)send_udp(peer_ip, msg);
         }
 
         std::this_thread::sleep_for(milliseconds(TICK_MS));
