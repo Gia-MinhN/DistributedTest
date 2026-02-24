@@ -52,6 +52,7 @@ bool Node::start() {
     joined.store(false);
 
     udpq.start(*this);
+    hb.start(*this);
 
     udp_thread = std::thread(udp_receiver_loop, udp_sock, std::ref(*this));
     tcp_thread = std::thread(tcp_receiver_loop, tcp_sock, std::ref(*this));
@@ -81,7 +82,10 @@ bool Node::start() {
     me.last_seen_ms = now_ms();
     me.incarnation = 0;
 
-    membership.insert({name, me});
+    {
+        std::lock_guard<std::mutex> lk(membership_mu);
+        membership[name] = me;
+    }
 
     std::cout << "Node [" << name << "@" << ip << "] started.\n";
     return true;
@@ -101,6 +105,7 @@ void Node::stop() {
     if (tcp_sock >= 0) close(tcp_sock);
 
     udpq.stop();
+    hb.stop();
 
     if (udp_thread.joinable()) udp_thread.join();
     if (tcp_thread.joinable()) tcp_thread.join();
@@ -109,7 +114,10 @@ void Node::stop() {
     udp_sock = -1;
     tcp_sock = -1;
 
-    membership.clear();
+    {
+        std::lock_guard<std::mutex> lk(membership_mu);
+        membership.clear();
+    }
 
     std::cout << "Node [" << name << "@" << ip << "] stopped.\n";
 }

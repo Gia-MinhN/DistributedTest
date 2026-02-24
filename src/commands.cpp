@@ -55,16 +55,19 @@ void list_members(const Node& node) {
     std::vector<std::vector<std::string>> rows;
     rows.reserve(node.membership.size());
 
-    for (const auto& [name, info] : node.membership) {
-        std::string shown_name = (name == node.name) ? (name + " *") : name;
+    {
+        std::lock_guard<std::mutex> lk(node.membership_mu);
+        for (const auto& [name, info] : node.membership) {
+            std::string shown_name = (name == node.name) ? (name + " *") : name;
 
-        rows.push_back({
-            shown_name,
-            status_str(info.status),
-            info.ip,
-            std::to_string(info.last_seen_ms),
-            std::to_string(info.incarnation)
-        });
+            rows.push_back({
+                shown_name,
+                status_str(info.status),
+                info.ip,
+                std::to_string(info.last_seen_ms),
+                std::to_string(info.incarnation)
+            });
+        }
     }
 
     print_table(headers, rows);

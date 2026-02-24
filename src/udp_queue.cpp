@@ -164,4 +164,14 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
         apply_welcome_members(*node_, data);
         return;
     }
+
+    if (type == "PING") {
+        std::string reply = make_msg("ACK", node_->name, node_->ip, "");
+        send_udp(ip, reply);
+        return;
+    }
+
+    if (type == "ACK") {
+        return;
+    }
 }

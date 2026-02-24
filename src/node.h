@@ -6,8 +6,10 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <mutex>
 
 #include "udp_queue.h"
+#include "heartbeat.h"
 
 enum class MemberStatus {
     Alive,
@@ -41,11 +43,13 @@ public:
     int tcp_sock{-1};
 
     UdpQueue udpq;
+    Heartbeat hb;
 
     std::thread udp_thread;
     std::thread tcp_thread;
     std::thread join_thread;
 
+    mutable std::mutex membership_mu;
     std::map<std::string, MemberInfo> membership;
 
     Node(std::vector<std::string> seeds);
