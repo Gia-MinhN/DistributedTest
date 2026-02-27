@@ -12,18 +12,16 @@
 #include "time_util.h"
 #include "membership_config.h"
 
-static std::string build_piggy_data(Node& node, size_t k) {
-    uint64_t self_inc = 0;
-    auto it = node.membership.find(node.name);
-    if (it != node.membership.end()) self_inc = it->second.incarnation;
-
-    // name@ip@inc@S@lastSeen,...
+static std::string build_piggy_data(Node& node,
+                                    const std::string& exclude_name,
+                                    size_t k) {
     std::vector<std::string> entries;
     entries.reserve(node.membership.size());
 
     for (const auto& [n, info] : node.membership) {
         if (n.empty() || info.ip.empty()) continue;
         if (n == node.name) continue;
+        if (n == exclude_name) continue;
 
         std::string e;
         e.reserve(n.size() + info.ip.size() + 40);
@@ -41,23 +39,18 @@ static std::string build_piggy_data(Node& node, size_t k) {
         entries.push_back(std::move(e));
     }
 
-    if (!entries.empty() && k > 0) {
-        static thread_local std::mt19937 rng(std::random_device{}());
-        std::shuffle(entries.begin(), entries.end(), rng);
-        if (entries.size() > k) entries.resize(k);
-    } else {
-        entries.clear();
-    }
+    if (entries.empty() || k == 0) return "";
+
+    static thread_local std::mt19937 rng(std::random_device{}());
+    std::shuffle(entries.begin(), entries.end(), rng);
+    if (entries.size() > k) entries.resize(k);
 
     std::string csv;
     for (size_t i = 0; i < entries.size(); i++) {
         if (i) csv.push_back(',');
         csv += entries[i];
     }
-
-    std::string out = "inc=" + std::to_string(self_inc);
-    if (!csv.empty()) out += " " + csv;
-    return out;
+    return csv;
 }
 
 void Heartbeat::start(Node& node) {
@@ -77,19 +70,17 @@ void Heartbeat::loop() {
     while (node_ && node_->running.load()) {
         const uint64_t now = now_ms();
 
-        std::vector<std::string> peer_ips;
-        std::string piggy_data;
-
+        std::vector<std::string> peer_names;
         {
             std::lock_guard<std::mutex> lk(node_->membership_mu);
 
-            // refresh self
             auto& me = node_->membership[node_->name];
             me.ip = node_->ip;
             me.status = MemberStatus::Alive;
             me.last_seen_ms = now;
 
-            peer_ips.reserve(node_->membership.size());
+            peer_names.reserve(node_->membership.size());
+
             for (auto& [n, info] : node_->membership) {
                 if (n == node_->name) continue;
 
@@ -103,36 +94,50 @@ void Heartbeat::loop() {
                 }
 
                 if (info.status != MemberStatus::Dead && !info.ip.empty()) {
-                    peer_ips.push_back(info.ip);
+                    peer_names.push_back(n);
                 }
             }
-
-            piggy_data = build_piggy_data(*node_, PIGGY_K);
         }
 
-        std::sort(peer_ips.begin(), peer_ips.end());
-        peer_ips.erase(std::unique(peer_ips.begin(), peer_ips.end()), peer_ips.end());
+        std::sort(peer_names.begin(), peer_names.end());
+        peer_names.erase(std::unique(peer_names.begin(), peer_names.end()), peer_names.end());
 
-        if (peer_ips != rr_peers_) {
-            rr_peers_ = peer_ips;
+        if (peer_names != rr_peers_) {
+            rr_peers_ = peer_names;
             rr_idx_ = 0;
             std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
         }
 
-        std::vector<std::string> to_ping;
-        to_ping.reserve(FANOUT);
+        std::vector<std::string> targets;
+        targets.reserve(FANOUT);
 
         for (size_t i = 0; i < FANOUT && !rr_peers_.empty(); i++) {
             if (rr_idx_ >= rr_peers_.size()) {
                 rr_idx_ = 0;
                 std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
             }
-            to_ping.push_back(rr_peers_[rr_idx_++]);
+            targets.push_back(rr_peers_[rr_idx_++]);
         }
 
-        for (const auto& peer_ip : to_ping) {
-            std::string msg = make_msg("PING", node_->name, node_->ip, piggy_data);
-            (void)send_udp(peer_ip, msg);
+        for (const auto& target_name : targets) {
+            std::string target_ip;
+            std::string piggy;
+
+            {
+                std::lock_guard<std::mutex> lk(node_->membership_mu);
+
+                auto it = node_->membership.find(target_name);
+                if (it == node_->membership.end()) continue;
+                if (it->second.status == MemberStatus::Dead) continue;
+
+                target_ip = it->second.ip;
+                if (target_ip.empty()) continue;
+
+                piggy = build_piggy_data(*node_, target_name, PIGGY_K);
+            }
+
+            std::string msg = make_msg("PING", *node_, piggy);
+            (void)send_udp(target_ip, msg);
         }
 
         std::this_thread::sleep_for(milliseconds(TICK_MS));

@@ -14,7 +14,7 @@ void attempt_join_loop(Node& node) {
             if (!node.running.load() || !node.attempt_join.load() || node.joined.load())
                 break;
 
-            std::string msg = make_msg("JOIN", node.name, node.ip);
+            std::string msg = make_msg("JOIN", node);
             send_udp(seed_ip, msg);
         }
 

@@ -88,7 +88,7 @@ bool Node::start() {
         for (const auto& seed_ip : seeds) {
             if (seed_ip == ip) continue;
 
-            std::string msg = make_msg("JOIN", name, ip);
+            std::string msg = make_msg("JOIN", std::ref(*this));
             send_udp(seed_ip, msg);
         }
     } else {
@@ -103,7 +103,7 @@ bool Node::start() {
     me.ip = ip;
     me.status = MemberStatus::Alive;
     me.last_seen_ms = now_ms();
-    me.incarnation = 0;
+    me.incarnation = incarnation;
 
     {
         std::lock_guard<std::mutex> lk(membership_mu);

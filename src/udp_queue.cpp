@@ -38,21 +38,6 @@ static MemberStatus status_from_char(char c) {
     return MemberStatus::Alive;
 }
 
-static uint64_t parse_sender_inc(std::string& data_in_out) {
-    data_in_out = trim(data_in_out);
-    if (data_in_out.rfind("inc=", 0) != 0) return 0;
-
-    size_t pos = 4;
-    size_t end = pos;
-    while (end < data_in_out.size() && std::isdigit((unsigned char)data_in_out[end])) end++;
-
-    uint64_t inc = 0;
-    try { inc = (uint64_t)std::stoull(data_in_out.substr(pos, end - pos)); } catch (...) { inc = 0; }
-
-    // Remove "inc=NUM" and any following whitespace
-    data_in_out = trim(data_in_out.substr(end));
-    return inc;
-}
 
 // name@ip@inc@S@lastSeen
 static std::string make_entry(const std::string& name, const MemberInfo& info) {
@@ -100,11 +85,15 @@ static std::string piggyback_csv_random_k(const Node& node,
 static void merge_member(Node& node,
                          const std::string& name,
                          const std::string& ip,
-                         uint64_t inc,
+                         const std::string& inc_str,
                          MemberStatus st,
                          uint64_t last_seen,
                          bool direct) {
     MemberInfo& cur = node.membership[name];
+
+    uint64_t inc = 0;
+    try { inc = (uint64_t)std::stoull(inc_str); } catch (...) { inc = 0; }
+
     if (!ip.empty()) cur.ip = ip;
 
     if (inc > cur.incarnation) {
@@ -113,6 +102,7 @@ static void merge_member(Node& node,
         if (direct) cur.last_seen_ms = last_seen;
         return;
     }
+
     if (inc < cur.incarnation) {
         return;
     }
@@ -123,9 +113,7 @@ static void merge_member(Node& node,
         return;
     }
 
-    if (st == MemberStatus::Alive) {
-        return;
-    }
+    if (st == MemberStatus::Alive) return;
 
     if (status_rank(st) > status_rank(cur.status)) {
         cur.status = st;
@@ -154,15 +142,11 @@ static void apply_piggyback(Node& node, const std::string& csv) {
             std::string ip = entry.substr(a + 1, b - (a + 1));
             std::string inc_s = entry.substr(b + 1, c - (b + 1));
             char st_c = entry[c + 1];
-            std::string ls_s = entry.substr(d + 1);
 
             if (n == node.name) { start = comma + 1; continue; }
 
             if (!n.empty() && !ip.empty()) {
-                uint64_t inc = 0;
-                try { inc = (uint64_t)std::stoull(inc_s); } catch (...) { inc = 0; }
-
-                merge_member(node, n, ip, inc, status_from_char(st_c), 0, false);
+                merge_member(node, n, ip, inc_s, status_from_char(st_c), 0, false);
             }
         }
 
@@ -173,21 +157,8 @@ static void apply_piggyback(Node& node, const std::string& csv) {
 static std::string build_piggy_data(Node& node,
                                     const std::string& exclude_name,
                                     size_t k) {
-    uint64_t self_inc = 0;
-    std::string pb;
-
-    {
-        std::lock_guard<std::mutex> lk(node.membership_mu);
-
-        auto it = node.membership.find(node.name);
-        if (it != node.membership.end()) self_inc = it->second.incarnation;
-
-        pb = piggyback_csv_random_k(node, exclude_name, k);
-    }
-
-    std::string out = "inc=" + std::to_string(self_inc);
-    if (!pb.empty()) out += " " + pb;
-    return out;
+    std::lock_guard<std::mutex> lk(node.membership_mu);
+    return piggyback_csv_random_k(node, exclude_name, k);
 }
 
 void UdpQueue::start(Node& node) {
@@ -248,29 +219,29 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
     std::string msg = trim(payload);
     if (msg.empty()) return;
 
-    std::string type, sender_name, sender_ip;
+    std::string type, sender_name, sender_ip, sender_inc;
     size_t pos = 0;
 
+    // parse payload
     next_token(msg, pos, type);
     next_token(msg, pos, sender_name);
     next_token(msg, pos, sender_ip);
+    next_token(msg, pos, sender_inc);
 
     std::string data = rest_of_line(msg, pos);
 
-    uint64_t sender_inc = parse_sender_inc(data);
-
+    const uint64_t now = now_ms();
     {
         std::lock_guard<std::mutex> lk(node_->membership_mu);
-
         apply_piggyback(*node_, data);
         if (!sender_name.empty() && !sender_ip.empty()) {
-            merge_member(*node_, sender_name, sender_ip, sender_inc, MemberStatus::Alive, now_ms(), true);
+            merge_member(*node_, sender_name, sender_ip, sender_inc, MemberStatus::Alive, now, true);
         }
     }
 
     if (type == "JOIN") {
         std::string piggy_msg = build_piggy_data(*node_, sender_name, PIGGY_K);
-        std::string reply = make_msg("WELCOME", node_->name, node_->ip, piggy_msg);
+        std::string reply = make_msg("WELCOME", *node_, piggy_msg);
         send_udp(sender_ip, reply);
         return;
     }
@@ -283,7 +254,7 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
 
     if (type == "PING") {
         std::string piggy_msg = build_piggy_data(*node_, sender_name, PIGGY_K);
-        std::string reply = make_msg("ACK", node_->name, node_->ip, piggy_msg);
+        std::string reply = make_msg("ACK", *node_, piggy_msg);
         send_udp(sender_ip, reply);
         return;
     }
