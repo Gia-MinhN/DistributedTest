@@ -1,6 +1,8 @@
 #include "commands.h"
 
 #include <iostream>
+#include <algorithm>
+#include <string>
 
 #include "node.h"
 #include "table_print.h"
@@ -16,29 +18,65 @@ void help() {
         << "  quit, exit  - exit the program\n";
 }
 
+
 void info(const Node& node) {
-    std::cout << "Name:   " << node.name << "\n";
-    std::cout << "IP:     " << node.ip << "\n";
+    const bool running = node.running.load();
+    const bool joined  = node.joined.load();
+    const bool trying  = node.attempt_join.load();
+    const bool seed    = node.is_seed;
 
-    bool running = node.running.load();
-    bool joined  = node.joined.load();
-    bool trying  = node.attempt_join.load();
-    bool seed    = (node.name == "node0");
+    const std::string name_str   = node.name;
+    const std::string ip_str     = node.ip;
+    const std::string role_str   = (seed ? "Seed" : "Node");
+    const std::string inc_str    = std::to_string(node.incarnation);
+    const std::string status_str = (running ? "Running" : "Not running");
 
-    std::cout << "Status: " << (running ? "Running" : "Not running") << "\n";
+    std::string joined_str =
+        seed ? "Yes" :
+        joined ? "Yes" :
+        (running && trying) ? "Attempting" : "No";
 
-    std::string joined_str;
-    if (seed) {
-        joined_str = "Yes";
-    } else if (joined) {
-        joined_str = "Yes";
-    } else if (running && trying) {
-        joined_str = "Attempting";
-    } else {
-        joined_str = "No";
+    const size_t max_len = std::max({
+        name_str.size(), ip_str.size(), role_str.size(),
+        inc_str.size(), status_str.size(), joined_str.size()
+    });
+
+    const size_t label_w = 11;
+    const size_t inner_w = 1 + label_w + 1 + max_len + 1;
+    const size_t total_w = inner_w + 2;
+
+    auto border = [&]() {
+        std::cout << "+" << std::string(total_w - 2, '-') << "+\n";
+    };
+
+    auto row = [&](const std::string& label, const std::string& value) {
+        std::string l = label;
+        if (l.size() < label_w) l += std::string(label_w - l.size(), ' ');
+
+        std::string v = value;
+        if (v.size() < max_len) v += std::string(max_len - v.size(), ' ');
+
+        std::cout << "| " << l << " " << v << " |\n";
+    };
+
+    const std::string title = "Node Info";
+    border();
+    {
+        size_t pad_total = total_w - 2;
+        size_t left = (pad_total > title.size()) ? (pad_total - title.size()) / 2 : 0;
+        size_t right = (pad_total > title.size()) ? (pad_total - title.size() - left) : 0;
+        std::cout << "|" << std::string(left, ' ') << title << std::string(right, ' ') << "|\n";
     }
+    border();
 
-    std::cout << "Joined: " << joined_str << "\n";
+    row("Name",        name_str);
+    row("IP",          ip_str);
+    row("Role",        role_str);
+    row("Status",      status_str);
+    row("Joined",      joined_str);
+    row("Incarnation", inc_str);
+
+    border();
 }
 
 static const char* status_str(MemberStatus s) {

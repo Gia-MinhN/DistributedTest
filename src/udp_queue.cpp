@@ -103,43 +103,37 @@ static void merge_member(Node& node,
                          uint64_t inc,
                          MemberStatus st,
                          uint64_t last_seen,
-                         uint64_t now) {
+                         bool direct) {
     MemberInfo& cur = node.membership[name];
-
     if (!ip.empty()) cur.ip = ip;
 
     if (inc > cur.incarnation) {
         cur.incarnation = inc;
         cur.status = st;
+        if (direct) cur.last_seen_ms = last_seen;
+        return;
+    }
+    if (inc < cur.incarnation) {
+        return;
+    }
+
+    if (direct) {
+        cur.status = MemberStatus::Alive;
         cur.last_seen_ms = last_seen;
         return;
     }
 
-    if (inc < cur.incarnation) {
-        cur.last_seen_ms = std::max(cur.last_seen_ms, last_seen);
-        return;
-    }
-
     if (st == MemberStatus::Alive) {
-        cur.status = MemberStatus::Alive;
-        cur.last_seen_ms = std::max(cur.last_seen_ms, last_seen);
         return;
     }
 
-    const uint64_t cur_seen = cur.last_seen_ms;
-    const uint64_t age = (cur_seen == 0 || now < cur_seen) ? 0 : (now - cur_seen);
-
-    if (last_seen > cur_seen && age > SUSPECT_MS) {
-        if (status_rank(st) > status_rank(cur.status)) cur.status = st;
+    if (status_rank(st) > status_rank(cur.status)) {
+        cur.status = st;
     }
-
-    cur.last_seen_ms = std::max(cur.last_seen_ms, last_seen);
 }
 
 static void apply_piggyback(Node& node, const std::string& csv) {
     if (csv.empty()) return;
-
-    const uint64_t now = now_ms();
 
     size_t start = 0;
     while (start < csv.size()) {
@@ -165,11 +159,10 @@ static void apply_piggyback(Node& node, const std::string& csv) {
             if (n == node.name) { start = comma + 1; continue; }
 
             if (!n.empty() && !ip.empty()) {
-                uint64_t inc = 0, ls = 0;
+                uint64_t inc = 0;
                 try { inc = (uint64_t)std::stoull(inc_s); } catch (...) { inc = 0; }
-                try { ls  = (uint64_t)std::stoull(ls_s); } catch (...) { ls = 0; }
 
-                merge_member(node, n, ip, inc, status_from_char(st_c), ls, now);
+                merge_member(node, n, ip, inc, status_from_char(st_c), 0, false);
             }
         }
 
@@ -266,20 +259,12 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
 
     uint64_t sender_inc = parse_sender_inc(data);
 
-    const uint64_t now = now_ms();
-
     {
         std::lock_guard<std::mutex> lk(node_->membership_mu);
 
         apply_piggyback(*node_, data);
         if (!sender_name.empty() && !sender_ip.empty()) {
-            merge_member(*node_,
-                        sender_name,
-                        sender_ip,
-                        sender_inc,
-                        MemberStatus::Alive,
-                        now,
-                        now);
+            merge_member(*node_, sender_name, sender_ip, sender_inc, MemberStatus::Alive, now_ms(), true);
         }
     }
 

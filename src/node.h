@@ -32,6 +32,8 @@ public:
     std::string name;
     std::string ip;
 
+    uint64_t incarnation = 0;
+
     std::vector<std::string> seeds;
     bool is_seed;
 

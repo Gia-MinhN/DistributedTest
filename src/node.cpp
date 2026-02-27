@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <iostream>
+#include <fstream>
+#include <string>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -14,6 +17,22 @@
 #include "sender.h"
 #include "time_util.h"
 
+static uint64_t read_or_init_incarnation(const std::string& path) {
+    std::ifstream in(path);
+    if (in) {
+        uint64_t v = 0;
+        if (in >> v) return v;
+    }
+
+    std::ofstream out(path, std::ios::trunc);
+    if (out) out << -1 << "\n";
+    return 0;
+}
+
+static void write_incarnation(const std::string& path, uint64_t inc) {
+    std::ofstream out(path, std::ios::trunc);
+    if (out) out << inc << "\n";
+}
 
 Node::Node(std::vector<std::string> s) : seeds(std::move(s)) {
     name = get_hostname();
@@ -32,6 +51,10 @@ Node::~Node() {
 
 bool Node::start() {
     if (running.load()) return true;
+
+    incarnation = read_or_init_incarnation("incarnation");
+    incarnation += 1;
+    write_incarnation("incarnation", incarnation);
 
     udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (udp_sock < 0) {
