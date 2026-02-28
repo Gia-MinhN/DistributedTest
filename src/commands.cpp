@@ -193,8 +193,14 @@ CommandResult handle_command(const std::string& cmd, const std::string& args, No
     if (cmd == "start")  { node.start(); return CommandResult::Continue; }
     if (cmd == "stop")   { node.stop(); return CommandResult::Continue; }
 
-    if (cmd == "list") { list_members(node); return CommandResult::Continue; }
-    if (cmd == "live_list") { live_list_members(node); return CommandResult::Continue; }
+    if (cmd == "list") {
+        if (args == "live") {
+            live_list_members(node);
+        } else {
+            list_members(node);
+        }
+        return CommandResult::Continue;
+    }
 
     if (cmd == "quit" || cmd == "exit") return CommandResult::Quit;
 
