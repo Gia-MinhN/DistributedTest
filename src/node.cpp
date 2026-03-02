@@ -53,8 +53,7 @@ bool Node::start() {
     if (running.load()) return true;
 
     incarnation = read_or_init_incarnation("incarnation");
-    incarnation += 1;
-    write_incarnation("incarnation", incarnation);
+    set_incarnation(incarnation + 1);
 
     udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (udp_sock < 0) {
@@ -143,4 +142,11 @@ void Node::stop() {
     }
 
     std::cout << "Node [" << name << "@" << ip << "] stopped.\n";
+}
+
+uint64_t Node::set_incarnation(uint64_t new_inc) {
+    incarnation = new_inc;
+    write_incarnation("incarnation", incarnation);
+
+    return incarnation;
 }

@@ -96,26 +96,20 @@ static void merge_member(Node& node,
 
     if (!ip.empty()) cur.ip = ip;
 
-    if (inc > cur.incarnation) {
-        cur.incarnation = inc;
-        cur.status = st;
-        if (direct) cur.last_seen_ms = last_seen;
-        return;
-    }
-
-    if (inc < cur.incarnation) {
-        return;
-    }
-
     if (direct) {
         cur.status = MemberStatus::Alive;
         cur.last_seen_ms = last_seen;
+        cur.incarnation = inc;
         return;
     }
 
-    if (st == MemberStatus::Alive) return;
-
-    if (status_rank(st) > status_rank(cur.status)) {
+    if (inc > cur.incarnation) {
+        cur.incarnation = inc;
+        cur.status = st;
+        return;
+    } else if (inc < cur.incarnation) {
+        return;
+    } else if (status_rank(st) > status_rank(cur.status)) {
         cur.status = st;
     }
 }

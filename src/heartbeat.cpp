@@ -70,7 +70,67 @@ void Heartbeat::loop() {
     while (node_ && node_->running.load()) {
         const uint64_t now = now_ms();
 
+        // -------------------------------------------------
+        // Handle probe timeouts
+        // -------------------------------------------------
+        for (auto it = probes_.begin(); it != probes_.end(); ) {
+            std::string target = it->first;
+            Probe& p = it->second;
+
+            if (now < p.deadline_ms) {
+                ++it;
+                continue;
+            }
+
+            if (p.phase == Phase::Direct) {
+                // Escalate to indirect probe
+                p.phase = Phase::Indirect;
+                p.deadline_ms = now + INDIRECT_TIMEOUT_MS;
+
+                // Send PING-REQ to k helpers
+                std::vector<std::string> helpers = rr_peers_;
+                std::shuffle(helpers.begin(), helpers.end(), rr_rng_);
+
+                size_t sent = 0;
+                for (const auto& helper : helpers) {
+                    if (helper == target) continue;
+                    if (sent >= FANOUT) break;
+
+                    std::string helper_ip;
+                    {
+                        std::lock_guard<std::mutex> lk(node_->membership_mu);
+                        auto it2 = node_->membership.find(helper);
+                        if (it2 == node_->membership.end()) continue;
+                        helper_ip = it2->second.ip;
+                    }
+
+                    std::string msg = make_msg("PING-REQ", *node_, target);
+                    (void)send_udp(helper_ip, msg);
+                    sent++;
+                }
+
+                ++it;
+            }
+            else {
+                // Indirect failed, mark Suspect
+                {
+                    std::lock_guard<std::mutex> lk(node_->membership_mu);
+                    auto it2 = node_->membership.find(target);
+                    if (it2 != node_->membership.end() &&
+                        it2->second.status == MemberStatus::Alive) {
+                        it2->second.status = MemberStatus::Suspect;
+                    }
+                }
+
+                it = probes_.erase(it);
+            }
+        }
+
+        // -------------------------------------------------
+        // Membership aging (Suspect -> Dead)
+        // -------------------------------------------------
         std::vector<std::string> peer_names;
+
         {
             std::lock_guard<std::mutex> lk(node_->membership_mu);
 
@@ -79,18 +139,14 @@ void Heartbeat::loop() {
             me.status = MemberStatus::Alive;
             me.last_seen_ms = now;
 
-            peer_names.reserve(node_->membership.size());
-
             for (auto& [n, info] : node_->membership) {
                 if (n == node_->name) continue;
 
-                const uint64_t age =
-                    (info.last_seen_ms == 0 || now < info.last_seen_ms) ? 0 : (now - info.last_seen_ms);
-
-                if (info.status != MemberStatus::Dead && age > DEAD_MS) {
-                    info.status = MemberStatus::Dead;
-                } else if (info.status == MemberStatus::Alive && age > SUSPECT_MS) {
-                    info.status = MemberStatus::Suspect;
+                if (info.status == MemberStatus::Suspect) {
+                    uint64_t age = now - info.last_seen_ms;
+                    if (age > SUSPECT_MS) {
+                        info.status = MemberStatus::Dead;
+                    }
                 }
 
                 if (info.status != MemberStatus::Dead && !info.ip.empty()) {
@@ -108,36 +164,35 @@ void Heartbeat::loop() {
             std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
         }
 
-        std::vector<std::string> targets;
-        targets.reserve(FANOUT);
-
+        // -------------------------------------------------
+        // Start new probes
+        // -------------------------------------------------
         for (size_t i = 0; i < FANOUT && !rr_peers_.empty(); i++) {
             if (rr_idx_ >= rr_peers_.size()) {
                 rr_idx_ = 0;
                 std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
             }
-            targets.push_back(rr_peers_[rr_idx_++]);
-        }
 
-        for (const auto& target_name : targets) {
+            const std::string& target = rr_peers_[rr_idx_++];
+
+            if (probes_.count(target)) continue;
+
             std::string target_ip;
-            std::string piggy;
-
             {
                 std::lock_guard<std::mutex> lk(node_->membership_mu);
-
-                auto it = node_->membership.find(target_name);
+                auto it = node_->membership.find(target);
                 if (it == node_->membership.end()) continue;
-                if (it->second.status == MemberStatus::Dead) continue;
-
                 target_ip = it->second.ip;
-                if (target_ip.empty()) continue;
-
-                piggy = build_piggy_data(*node_, target_name, PIGGY_K);
             }
 
+            std::string piggy = build_piggy_data(*node_, target, PIGGY_K);
             std::string msg = make_msg("PING", *node_, piggy);
             (void)send_udp(target_ip, msg);
+
+            probes_[target] = {
+                Phase::Direct,
+                now + PING_TIMEOUT_MS
+            };
         }
 
         std::this_thread::sleep_for(milliseconds(TICK_MS));

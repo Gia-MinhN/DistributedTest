@@ -59,4 +59,6 @@ public:
 
     bool start();
     void stop();
+
+    uint64_t set_incarnation(uint64_t new_inc);
 };
