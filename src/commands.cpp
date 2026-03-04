@@ -15,12 +15,13 @@
 void help() {
     std::cout
         << "Commands:\n"
-        << "  help, man   - show this message\n"
-        << "  info        - show this node's info (name, ip, status)\n"
-        << "  start       - start networking + background join attempts\n"
-        << "  stop        - stop networking + background threads\n"
-        << "  list        - list all known members\n"
-        << "  quit, exit  - exit the program\n";
+        << "  help, man       - show this message\n"
+        << "  info            - show this node's info (name, IP, status)\n"
+        << "  start           - start networking + background join attempts\n"
+        << "  stop            - stop networking + background threads\n"
+        << "  list [live]     - list all known members; add 'live' to make it an updating table\n"
+        << "  ping <target>   - send a ping to the given IP or hostname\n"
+        << "  quit, exit      - exit the program\n";
 }
 
 
