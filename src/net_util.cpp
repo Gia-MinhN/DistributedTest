@@ -44,3 +44,8 @@ std::string detect_local_ip() {
     if (!inet_ntop(AF_INET, &local.sin_addr, buf, sizeof(buf))) return "";
     return std::string(buf);
 }
+
+bool is_valid_ipv4(const std::string& s) {
+    sockaddr_in sa;
+    return inet_pton(AF_INET, s.c_str(), &(sa.sin_addr)) == 1;
+}

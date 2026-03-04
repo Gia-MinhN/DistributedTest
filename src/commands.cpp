@@ -202,6 +202,11 @@ CommandResult handle_command(const std::string& cmd, const std::string& args, No
         return CommandResult::Continue;
     }
 
+    if (cmd == "ping") {
+        node.ping_test(args);
+        return CommandResult::Continue;
+    }
+
     if (cmd == "quit" || cmd == "exit") return CommandResult::Quit;
 
     std::cout << "Unknown command: " << cmd << "\n";

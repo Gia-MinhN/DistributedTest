@@ -75,7 +75,7 @@ void Heartbeat::loop() {
     while (node_ && node_->running.load()) {
 
         const uint64_t now = now_ms();
-
+        
         // timeouts
         std::vector<std::string> escalate_to_indirect;
         std::vector<std::string> escalate_to_suspect;

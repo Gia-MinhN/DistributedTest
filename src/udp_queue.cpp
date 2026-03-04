@@ -294,4 +294,22 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
         node_->hb.clear_probe(data);
         return;
     }
+
+    if (type == "PING-TEST") {
+        std::string reply = make_msg("ACK-TEST", *node_);
+        send_udp(sender_ip, reply);
+        return;
+    }
+
+    if (type == "ACK-TEST") {
+        std::string key = sender_name.empty() ? sender_ip : sender_name;
+
+        std::lock_guard<std::mutex> lk(node_->cli_ping_mu_);
+        auto it = node_->cli_ping_results_.find(key);
+        if (it != node_->cli_ping_results_.end()) {
+            it->second = true;
+            node_->cli_ping_cv_.notify_all();
+        }
+        return;
+    }
 }

@@ -56,6 +56,10 @@ public:
     mutable std::mutex membership_mu;
     std::map<std::string, MemberInfo> membership;
 
+    std::mutex cli_ping_mu_;
+    std::condition_variable cli_ping_cv_;
+    std::unordered_map<std::string, bool> cli_ping_results_;
+
     Node(std::vector<std::string> seeds);
     ~Node();
 
@@ -63,4 +67,6 @@ public:
     void stop();
 
     uint64_t set_incarnation(uint64_t new_inc);
+
+    bool ping_test(std::string arg);
 };

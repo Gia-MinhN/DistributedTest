@@ -150,3 +150,71 @@ uint64_t Node::set_incarnation(uint64_t new_inc) {
 
     return incarnation;
 }
+
+bool Node::ping_test(std::string arg) {
+    using namespace std::chrono;
+
+    std::string target_ip;
+    std::string target_name;
+
+    // Resolve target
+    if (is_valid_ipv4(arg)) {
+        target_ip = arg;
+
+        std::lock_guard<std::mutex> lk(membership_mu);
+        for (const auto& [name, info] : membership) {
+            if (info.ip == target_ip) {
+                target_name = name;
+                break;
+            }
+        }
+    } else {
+        target_name = arg;
+
+        std::lock_guard<std::mutex> lk(membership_mu);
+        auto it = membership.find(target_name);
+        if (it != membership.end()) {
+            target_ip = it->second.ip;
+        }
+    }
+
+    if (target_ip.empty()) {
+        std::cout << "Unknown target.\n";
+        return false;
+    }
+
+    // Use IP if no name exists
+    std::string key = target_name.empty() ? target_ip : target_name;
+
+    {
+        std::lock_guard<std::mutex> lk(cli_ping_mu_);
+        cli_ping_results_[key] = false;
+    }
+
+    auto start = steady_clock::now();
+
+    // Send ping
+    std::string msg = make_msg("PING-TEST", *this);
+    send_udp(target_ip, msg);
+
+    std::unique_lock<std::mutex> lk(cli_ping_mu_);
+
+    bool success = cli_ping_cv_.wait_for(
+        lk,
+        std::chrono::milliseconds(10000),
+        [&]() { return cli_ping_results_[key]; }
+    );
+
+    auto end = steady_clock::now();
+    cli_ping_results_.erase(key);
+
+    if (success) {
+        auto rtt = duration_cast<milliseconds>(end - start).count();
+        std::cout << "Reply from " << target_ip
+                  << " time=" << rtt << " ms\n";
+    } else {
+        std::cout << "Request timed out.\n";
+    }
+
+    return success;
+}
