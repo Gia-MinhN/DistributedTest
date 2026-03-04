@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 
 class Node;
 
@@ -24,6 +25,11 @@ public:
     void start(Node& node);
     void stop();
 
+    std::unordered_map<std::string, Probe> probes_;
+    std::mutex probes_mu_;
+
+    void clear_probe(const std::string& target);
+
 private:
     void loop();
 
@@ -33,6 +39,4 @@ private:
     std::vector<std::string> rr_peers_;
     size_t rr_idx_ = 0;
     std::mt19937 rr_rng_{std::random_device{}()};
-
-    std::unordered_map<std::string, Probe> probes_;
 };

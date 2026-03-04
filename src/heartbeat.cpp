@@ -64,99 +64,139 @@ void Heartbeat::stop() {
     node_ = nullptr;
 }
 
+void Heartbeat::clear_probe(const std::string& target) {
+    std::lock_guard<std::mutex> lk(probes_mu_);
+    probes_.erase(target);
+}
+
 void Heartbeat::loop() {
     using namespace std::chrono;
 
     while (node_ && node_->running.load()) {
+
         const uint64_t now = now_ms();
 
-        // -------------------------------------------------
-        // Handle probe timeouts
-        // -------------------------------------------------
-        for (auto it = probes_.begin(); it != probes_.end(); ) {
-            std::string target = it->first;
-            Probe& p = it->second;
+        // timeouts
+        std::vector<std::string> escalate_to_indirect;
+        std::vector<std::string> escalate_to_suspect;
 
-            if (now < p.deadline_ms) {
-                ++it;
-                continue;
-            }
+        {
+            std::lock_guard<std::mutex> lk(probes_mu_);
 
-            if (p.phase == Phase::Direct) {
-                // Escalate to indirect probe
-                p.phase = Phase::Indirect;
-                p.deadline_ms = now + INDIRECT_TIMEOUT_MS;
+            for (auto it = probes_.begin(); it != probes_.end(); ) {
 
-                // Send PING-REQ to k helpers
-                std::vector<std::string> helpers = rr_peers_;
-                std::shuffle(helpers.begin(), helpers.end(), rr_rng_);
-
-                size_t sent = 0;
-                for (const auto& helper : helpers) {
-                    if (helper == target) continue;
-                    if (sent >= FANOUT) break;
-
-                    std::string helper_ip;
-                    {
-                        std::lock_guard<std::mutex> lk(node_->membership_mu);
-                        auto it2 = node_->membership.find(helper);
-                        if (it2 == node_->membership.end()) continue;
-                        helper_ip = it2->second.ip;
-                    }
-
-                    std::string msg = make_msg("PING-REQ", *node_, target);
-                    (void)send_udp(helper_ip, msg);
-                    sent++;
+                if (now < it->second.deadline_ms) {
+                    ++it;
+                    continue;
                 }
 
-                ++it;
-            }
-            else {
-                // Indirect failed, mark Suspect
-                {
-                    std::lock_guard<std::mutex> lk(node_->membership_mu);
-                    auto it2 = node_->membership.find(target);
-                    if (it2 != node_->membership.end() &&
-                        it2->second.status == MemberStatus::Alive) {
-                        it2->second.status = MemberStatus::Suspect;
-                    }
-                }
+                if (it->second.phase == Phase::Direct) {
+                    escalate_to_indirect.push_back(it->first);
 
-                it = probes_.erase(it);
+                    it->second.phase = Phase::Indirect;
+                    it->second.deadline_ms = now + INDIRECT_TIMEOUT_MS;
+                    ++it;
+                }
+                else {
+                    escalate_to_suspect.push_back(it->first);
+                    it = probes_.erase(it);
+                }
             }
         }
 
-        // -------------------------------------------------
-        // Membership aging (Suspect -> Dead)
-        // -------------------------------------------------
+        // if no ack, ping-req
+        for (const auto& target : escalate_to_indirect) {
+
+            std::string target_ip;
+
+            {
+                std::lock_guard<std::mutex> lk(node_->membership_mu);
+                auto mit = node_->membership.find(target);
+                if (mit != node_->membership.end())
+                    target_ip = mit->second.ip;
+            }
+
+            if (target_ip.empty())
+                continue;
+
+            std::vector<std::string> helpers = rr_peers_;
+            std::shuffle(helpers.begin(), helpers.end(), rr_rng_);
+
+            size_t sent = 0;
+
+            for (const auto& helper : helpers) {
+                if (helper == target) continue;
+                if (sent >= FANOUT) break;
+
+                std::string helper_ip;
+
+                {
+                    std::lock_guard<std::mutex> lk(node_->membership_mu);
+                    auto mit = node_->membership.find(helper);
+                    if (mit != node_->membership.end())
+                        helper_ip = mit->second.ip;
+                }
+
+                if (helper_ip.empty())
+                    continue;
+
+                std::string target_info = target + "@" + target_ip;
+                std::string msg = make_msg("PING-REQ", *node_, target_info);
+
+                send_udp(helper_ip, msg);
+                sent++;
+            }
+        }
+
+        // if no ack-req, mark as suspect
+        if (!escalate_to_suspect.empty()) {
+
+            std::lock_guard<std::mutex> lk(node_->membership_mu);
+
+            for (const auto& target : escalate_to_suspect) {
+
+                auto mit = node_->membership.find(target);
+                if (mit == node_->membership.end())
+                    continue;
+
+                if (mit->second.status == MemberStatus::Alive) {
+                    mit->second.status = MemberStatus::Suspect;
+                    mit->second.suspect_since_ms = now;
+                }
+            }
+        }
+
+        // membership aging
         std::vector<std::string> peer_names;
 
         {
             std::lock_guard<std::mutex> lk(node_->membership_mu);
 
             auto& me = node_->membership[node_->name];
-            me.ip = node_->ip;
             me.status = MemberStatus::Alive;
             me.last_seen_ms = now;
 
-            for (auto& [n, info] : node_->membership) {
-                if (n == node_->name) continue;
+            for (auto& [name, info] : node_->membership) {
 
-                if (info.status == MemberStatus::Suspect) {
-                    uint64_t age = now - info.last_seen_ms;
-                    if (age > SUSPECT_MS) {
-                        info.status = MemberStatus::Dead;
-                    }
+                if (name == node_->name)
+                    continue;
+
+                if (info.status == MemberStatus::Suspect &&
+                    now - info.suspect_since_ms > SUSPECT_MS) {
+                    info.status = MemberStatus::Dead;
                 }
 
-                if (info.status != MemberStatus::Dead && !info.ip.empty()) {
-                    peer_names.push_back(n);
+                if (info.status != MemberStatus::Dead &&
+                    !info.ip.empty()) {
+                    peer_names.push_back(name);
                 }
             }
         }
 
+        // shuffled round robin
         std::sort(peer_names.begin(), peer_names.end());
-        peer_names.erase(std::unique(peer_names.begin(), peer_names.end()), peer_names.end());
+        peer_names.erase(std::unique(peer_names.begin(), peer_names.end()),
+                         peer_names.end());
 
         if (peer_names != rr_peers_) {
             rr_peers_ = peer_names;
@@ -164,37 +204,56 @@ void Heartbeat::loop() {
             std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
         }
 
-        // -------------------------------------------------
-        // Start new probes
-        // -------------------------------------------------
-        for (size_t i = 0; i < FANOUT && !rr_peers_.empty(); i++) {
+        // one direct ping
+        if (!rr_peers_.empty()) {
+
             if (rr_idx_ >= rr_peers_.size()) {
                 rr_idx_ = 0;
                 std::shuffle(rr_peers_.begin(), rr_peers_.end(), rr_rng_);
             }
 
-            const std::string& target = rr_peers_[rr_idx_++];
+            const std::string target = rr_peers_[rr_idx_++];
 
-            if (probes_.count(target)) continue;
+            bool already_probing = false;
 
-            std::string target_ip;
             {
-                std::lock_guard<std::mutex> lk(node_->membership_mu);
-                auto it = node_->membership.find(target);
-                if (it == node_->membership.end()) continue;
-                target_ip = it->second.ip;
+                std::lock_guard<std::mutex> lk(probes_mu_);
+                already_probing = probes_.count(target);
             }
 
-            std::string piggy = build_piggy_data(*node_, target, PIGGY_K);
-            std::string msg = make_msg("PING", *node_, piggy);
-            (void)send_udp(target_ip, msg);
+            if (!already_probing) {
 
-            probes_[target] = {
-                Phase::Direct,
-                now + PING_TIMEOUT_MS
-            };
+                std::string target_ip;
+
+                {
+                    std::lock_guard<std::mutex> lk(node_->membership_mu);
+                    auto mit = node_->membership.find(target);
+                    if (mit != node_->membership.end())
+                        target_ip = mit->second.ip;
+                }
+
+                if (!target_ip.empty()) {
+
+                    std::string piggy = build_piggy_data(*node_, target, PIGGY_K);
+
+                    std::string msg = make_msg("PING", *node_, piggy);
+                    send_udp(target_ip, msg);
+
+                    {
+                        std::lock_guard<std::mutex> lk(probes_mu_);
+                        probes_[target] = {
+                            Phase::Direct,
+                            now + PING_TIMEOUT_MS
+                        };
+                    }
+                }
+            }
         }
 
-        std::this_thread::sleep_for(milliseconds(TICK_MS));
+        // sleep remainder of tick
+        const uint64_t time_taken = now_ms() - now;
+
+        if (time_taken < TICK_MS)
+            std::this_thread::sleep_for(milliseconds(TICK_MS - time_taken));
     }
 }

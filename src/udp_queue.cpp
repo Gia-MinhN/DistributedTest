@@ -227,7 +227,9 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
     const uint64_t now = now_ms();
     {
         std::lock_guard<std::mutex> lk(node_->membership_mu);
-        apply_piggyback(*node_, data);
+        if (type == "JOIN" || type == "WELCOME" || type == "PING" || type == "ACK") {
+            apply_piggyback(*node_, data);
+        }
         if (!sender_name.empty() && !sender_ip.empty()) {
             merge_member(*node_, sender_name, sender_ip, sender_inc, MemberStatus::Alive, now, true);
         }
@@ -254,6 +256,42 @@ void UdpQueue::handle_datagram(const sockaddr_in& from, const std::string& paylo
     }
 
     if (type == "ACK") {
+        node_->hb.clear_probe(sender_name);
+        return;
+    }
+
+    if (type == "PING-REQ") {
+        std::string target_name;
+        std::string target_ip;
+
+        const auto at = data.find('@');
+        if (at == std::string::npos) return;
+
+        target_name = data.substr(0, at);
+        target_ip   = data.substr(at + 1);
+
+        if (target_name.empty() || target_ip.empty())
+            return;
+
+        std::string forward = make_msg("PING-REQ2", *node_, sender_ip);
+        send_udp(target_ip, forward);
+        return;
+    }
+
+    if (type == "PING-REQ2") {
+        std::string reply = make_msg("ACK-REQ", *node_, data);
+        send_udp(sender_ip, reply);
+        return;
+    }
+
+    if (type == "ACK-REQ") {
+        std::string forward = make_msg("ACK-REQ2", *node_, sender_name);
+        send_udp(data, forward);
+        return;
+    }
+
+    if (type == "ACK-REQ2") {
+        node_->hb.clear_probe(data);
         return;
     }
 }

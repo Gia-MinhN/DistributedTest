@@ -24,6 +24,8 @@ struct MemberInfo {
 
     uint64_t last_seen_ms = 0;
     uint64_t incarnation = 0;
+
+    uint64_t suspect_since_ms = 0;
 };
 
 
